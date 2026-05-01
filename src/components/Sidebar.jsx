@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NAV_ITEMS, GeometryPanel, MaterialPanel, BackgroundPanel, AnimationPanel, RenderPanel, ExportPanel } from './Panels'
+import { NAV_ITEMS, GeometryPanel, MaterialPanel, BackgroundPanel, AnimationPanel, RenderPanel, ExportPanel, PresetsPanel } from './Panels'
 
 export default function Sidebar({ settings, updateSetting, setSettings, hasMesh, exporting, setExporting, onUpload }) {
   const [activeSection, setActiveSection] = useState('material')
@@ -74,6 +74,7 @@ export default function Sidebar({ settings, updateSetting, setSettings, hasMesh,
 
       {/* Section content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 20px' }}>
+        {activeSection === 'presets'    && <PresetsPanel    setSettings={setSettings} />}
         {activeSection === 'geometry'   && <GeometryPanel   settings={settings} updateSetting={updateSetting} />}
         {activeSection === 'material'   && <MaterialPanel   settings={settings} updateSetting={updateSetting} setSettings={setSettings} />}
         {activeSection === 'background' && <BackgroundPanel settings={settings} updateSetting={updateSetting} />}

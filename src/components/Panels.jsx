@@ -1,7 +1,12 @@
-import { MATERIAL_PRESETS, MATERIAL_PREVIEWS, BACKGROUND_OPTIONS, ANIMATION_PRESETS, EXPORT_QUALITY, CAMERA_PRESETS } from '../constants'
+import { MATERIAL_PRESETS, MATERIAL_PREVIEWS, BACKGROUND_OPTIONS, ANIMATION_PRESETS, EXPORT_QUALITY, CAMERA_PRESETS, SCENE_PRESETS } from '../constants'
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 export const Icons = {
+  Presets: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+    </svg>
+  ),
   Geometry: () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
@@ -41,6 +46,7 @@ export const Icons = {
 }
 
 export const NAV_ITEMS = [
+  { key: 'presets',    label: 'Looks',      Ico: Icons.Presets },
   { key: 'geometry',   label: 'Geometry',   Ico: Icons.Geometry },
   { key: 'material',   label: 'Material',   Ico: Icons.Material },
   { key: 'background', label: 'BG',         Ico: Icons.Background },
@@ -76,6 +82,51 @@ export function SectionLabel({ children }) {
 }
 
 // ─── Panels ───────────────────────────────────────────────────────────────────
+export function PresetsPanel({ setSettings }) {
+  return (
+    <div style={{ paddingTop: 4 }}>
+      <SectionLabel>Scene Presets</SectionLabel>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 8 }}>
+        {SCENE_PRESETS.map((preset) => (
+          <button
+            key={preset.key}
+            onClick={() => setSettings(prev => ({ ...prev, ...preset.settings }))}
+            style={{
+              borderRadius: 14, cursor: 'pointer', border: '1px solid rgba(255,255,255,0.07)',
+              background: preset.gradient, overflow: 'hidden', padding: 0,
+              transition: 'all 0.2s', aspectRatio: '3/2', position: 'relative',
+              display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)' }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)' }}
+          >
+            {/* Accent dot */}
+            <div style={{
+              position: 'absolute', top: 10, right: 10,
+              width: 8, height: 8, borderRadius: '50%',
+              background: preset.accent,
+              boxShadow: `0 0 8px ${preset.accent}`,
+            }} />
+            {/* Label */}
+            <div style={{
+              padding: '6px 10px 9px',
+              background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%)',
+              textAlign: 'left',
+            }}>
+              <span style={{ fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.85)', letterSpacing: '0.01em' }}>
+                {preset.label}
+              </span>
+            </div>
+          </button>
+        ))}
+      </div>
+      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', marginTop: 10, lineHeight: 1.5, paddingLeft: 2 }}>
+        One click applies material, lighting, background & animation together.
+      </div>
+    </div>
+  )
+}
+
 export function GeometryPanel({ settings, updateSetting }) {
   return (
     <div style={{ paddingTop: 4 }}>
@@ -129,6 +180,25 @@ export function MaterialPanel({ settings, updateSetting, setSettings }) {
         />
         <span style={{ fontSize: 12, fontFamily: 'monospace', color: 'rgba(255,255,255,0.5)' }}>{settings.color}</span>
       </div>
+      {/* SVG Colors toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 2 }}>Use SVG Colors</div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>Per-path colors from file</div>
+        </div>
+        <button onClick={() => updateSetting('useSvgColors', !settings.useSvgColors)} style={{
+          width: 36, height: 20, borderRadius: 999, border: 'none', cursor: 'pointer',
+          background: settings.useSvgColors ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.1)',
+          position: 'relative', transition: 'all 0.2s', flexShrink: 0,
+        }}>
+          <div style={{
+            position: 'absolute', top: 2, width: 16, height: 16, borderRadius: '50%',
+            background: settings.useSvgColors ? '#0b0b0f' : 'rgba(255,255,255,0.4)',
+            left: settings.useSvgColors ? 18 : 2,
+            transition: 'all 0.2s',
+          }} />
+        </button>
+      </div>
       <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
         <Slider label="Light Intensity" value={settings.lightIntensity} onChange={v => updateSetting('lightIntensity', v)} min={0} max={5} step={0.1} />
       </div>
@@ -153,6 +223,8 @@ export function BackgroundPanel({ settings, updateSetting }) {
               width: '100%', height: 32, borderRadius: 8,
               ...(opt.transparent
                 ? { backgroundImage: 'repeating-conic-gradient(rgba(255,255,255,0.08) 0% 25%, rgba(255,255,255,0.02) 0% 50%)', backgroundSize: '10px 10px' }
+                : key === 'hdri'
+                ? { background: 'conic-gradient(from 90deg, #c8e8ff 0%, #ffd580 25%, #ffb347 50%, #6ab0ff 75%, #c8e8ff 100%)', opacity: 0.9 }
                 : key === 'custom'
                 ? { background: settings.customBgColor }
                 : { background: opt.color }),
@@ -162,7 +234,7 @@ export function BackgroundPanel({ settings, updateSetting }) {
         ))}
       </div>
 
-      {/* Custom color picker — shown when custom is selected */}
+      {/* Custom color picker */}
       {settings.background === 'custom' && (
         <div style={{
           marginTop: 14, padding: '12px 14px', borderRadius: 12,
@@ -173,16 +245,20 @@ export function BackgroundPanel({ settings, updateSetting }) {
             type="color"
             value={settings.customBgColor}
             onChange={e => updateSetting('customBgColor', e.target.value)}
-            style={{
-              width: 36, height: 36, borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)',
-              background: 'none', cursor: 'pointer', padding: 2, flexShrink: 0,
-            }}
+            style={{ width: 36, height: 36, borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'none', cursor: 'pointer', padding: 2, flexShrink: 0 }}
           />
           <div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', fontFamily: 'monospace', marginBottom: 2 }}>
-              {settings.customBgColor}
-            </div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', fontFamily: 'monospace', marginBottom: 2 }}>{settings.customBgColor}</div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>Click to pick any color</div>
+          </div>
+        </div>
+      )}
+
+      {/* HDRI hint */}
+      {settings.background === 'hdri' && (
+        <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5 }}>
+            Studio HDR environment shown as background. Loads from Poly Haven.
           </div>
         </div>
       )}
@@ -263,19 +339,39 @@ export function RenderPanel({ settings, updateSetting }) {
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
         }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-            <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/>
+            <line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
           </svg>
           {settings.usePathTracer ? 'Path Tracer On' : 'Path Tracer Off'}
         </button>
         <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', marginTop: 8, lineHeight: 1.5, paddingLeft: 2 }}>
           {settings.usePathTracer
-            ? 'Accumulating samples — move camera to reset. Pauses animation.'
+            ? 'Accumulating samples — move camera to reset.'
             : 'Real-time ray tracing for glass, chrome & reflections.'}
         </div>
       </div>
+
+      <SectionLabel>Depth of Field</SectionLabel>
+      <div style={{ marginBottom: 14 }}>
+        <button onClick={() => updateSetting('dofEnabled', !settings.dofEnabled)} style={{
+          width: '100%', padding: '10px 16px', borderRadius: 12, cursor: 'pointer', border: 'none',
+          background: settings.dofEnabled ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.06)',
+          color: settings.dofEnabled ? '#0b0b0f' : 'rgba(255,255,255,0.5)',
+          fontSize: 12, fontWeight: 600, transition: 'all 0.15s',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" strokeOpacity="0.4"/><circle cx="12" cy="12" r="12" strokeOpacity="0.15"/>
+          </svg>
+          {settings.dofEnabled ? 'Bokeh On' : 'Bokeh Off'}
+        </button>
+      </div>
+      {settings.dofEnabled && (
+        <Slider label="Blur Amount" value={settings.dofBlur} onChange={v => updateSetting('dofBlur', v)} min={0.05} max={1} step={0.01} />
+      )}
 
       <SectionLabel>Post Processing</SectionLabel>
       <Slider label="Bloom Intensity" value={settings.bloomIntensity} onChange={v => updateSetting('bloomIntensity', v)} min={0} max={2} step={0.01} />

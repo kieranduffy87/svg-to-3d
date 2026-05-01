@@ -36,12 +36,88 @@ export const MATERIAL_PREVIEWS = {
   jade:       'bg-gradient-to-br from-emerald-700 to-teal-600',
 }
 
+export const SCENE_PRESETS = [
+  {
+    key: 'obsidian', label: 'Obsidian Night',
+    gradient: 'linear-gradient(135deg, #0a0510 0%, #1a1020 40%, #2d1b3d 100%)',
+    accent: '#9b59b6',
+    settings: {
+      materialPreset: 'obsidian', color: '#1a1020', background: 'midnight',
+      animationPreset: 'float', rotationSpeed: 0.3, animationSpeed: 0.8,
+      bloomIntensity: 0.5, lightIntensity: 1.1, showGround: true, groundOpacity: 0.35,
+      roughness: 0.05, metalness: 0.3, clearcoat: 1.0, clearcoatRoughness: 0.1,
+      transmission: 0, ior: 1.5, thickness: 0, emissiveIntensity: 0, iridescence: 0.15, anisotropy: 0,
+    },
+  },
+  {
+    key: 'ice', label: 'Ice Glass',
+    gradient: 'linear-gradient(135deg, #020a24 0%, #051840 50%, #0a2860 100%)',
+    accent: '#4a90d9',
+    settings: {
+      materialPreset: 'glass', color: '#aaccff', background: 'blue',
+      animationPreset: 'spin', rotationSpeed: 0, animationSpeed: 0.6,
+      bloomIntensity: 0.7, lightIntensity: 1.3, showGround: true, groundOpacity: 0.28,
+      roughness: 0, metalness: 0, clearcoat: 1, clearcoatRoughness: 0,
+      transmission: 0.95, ior: 1.5, thickness: 2.0, emissiveIntensity: 0, iridescence: 0.2, anisotropy: 0,
+    },
+  },
+  {
+    key: 'gold', label: 'Gold Studio',
+    gradient: 'linear-gradient(135deg, #1a0d00 0%, #4a2800 50%, #9a6000 100%)',
+    accent: '#FFD700',
+    settings: {
+      materialPreset: 'gold', color: '#FFD700', background: 'studio',
+      animationPreset: 'orbit', rotationSpeed: 0, animationSpeed: 0.7,
+      bloomIntensity: 0.22, lightIntensity: 1.5, showGround: true, groundOpacity: 0.45,
+      roughness: 0.08, metalness: 1.0, clearcoat: 0, clearcoatRoughness: 0,
+      transmission: 0, ior: 1.5, thickness: 0, emissiveIntensity: 0, iridescence: 0, anisotropy: 0,
+    },
+  },
+  {
+    key: 'neon', label: 'Neon Cyber',
+    gradient: 'linear-gradient(135deg, #000d06 0%, #001f10 50%, #003320 100%)',
+    accent: '#00ffaa',
+    settings: {
+      materialPreset: 'neon', color: '#00ffaa', background: 'dark',
+      animationPreset: 'spin', rotationSpeed: 0, animationSpeed: 1.2,
+      bloomIntensity: 1.4, lightIntensity: 0.7, showGround: true, groundOpacity: 0.18,
+      roughness: 0.08, metalness: 0, clearcoat: 1.0, clearcoatRoughness: 0,
+      transmission: 0, ior: 1.5, thickness: 0, emissiveIntensity: 0.9, iridescence: 0, anisotropy: 0,
+    },
+  },
+  {
+    key: 'chrome', label: 'Chrome Dream',
+    gradient: 'linear-gradient(135deg, #666 0%, #aaa 50%, #e8e8e8 100%)',
+    accent: '#cccccc',
+    settings: {
+      materialPreset: 'chrome', color: '#d0d0d0', background: 'light',
+      animationPreset: 'wobble', rotationSpeed: 0.2, animationSpeed: 0.9,
+      bloomIntensity: 0.08, lightIntensity: 1.6, showGround: true, groundOpacity: 0.55,
+      roughness: 0.04, metalness: 1.0, clearcoat: 0, clearcoatRoughness: 0,
+      transmission: 0, ior: 1.5, thickness: 0, emissiveIntensity: 0, iridescence: 0, anisotropy: 0.6,
+    },
+  },
+  {
+    key: 'jade', label: 'Jade Mist',
+    gradient: 'linear-gradient(135deg, #040e09 0%, #0a2018 50%, #153828 100%)',
+    accent: '#2a9a6a',
+    settings: {
+      materialPreset: 'jade', color: '#2a7a5a', background: 'custom', customBgColor: '#08130e',
+      animationPreset: 'float', rotationSpeed: 0.1, animationSpeed: 0.7,
+      bloomIntensity: 0.18, lightIntensity: 1.1, showGround: true, groundOpacity: 0.22,
+      roughness: 0.18, metalness: 0, clearcoat: 0.85, clearcoatRoughness: 0.08,
+      transmission: 0.28, ior: 1.62, thickness: 3.2, emissiveIntensity: 0, iridescence: 0.08, anisotropy: 0,
+    },
+  },
+]
+
 export const BACKGROUND_OPTIONS = {
   dark:        { label: 'Dark',        color: '#111111', transparent: false },
   midnight:    { label: 'Midnight',    color: '#07091a', transparent: false },
   studio:      { label: 'Studio',      color: '#2d2d2d', transparent: false },
   light:       { label: 'Light',       color: '#f0f0f0', transparent: false },
   blue:        { label: 'Deep Blue',   color: '#050d2e', transparent: false },
+  hdri:        { label: 'HDRI Env',    color: null,      transparent: false, hdri: true },
   custom:      { label: 'Custom',      color: null,      transparent: false },
   transparent: { label: 'Transparent', color: null,      transparent: true  },
 }
@@ -90,6 +166,11 @@ export const DEFAULT_SETTINGS = {
   // Background
   background: 'dark',
   customBgColor: '#1a1a2e',
+  // Depth of Field
+  dofEnabled: false,
+  dofBlur: 0.35,
+  // SVG Colors
+  useSvgColors: false,
   // Lighting
   lightIntensity: 1.0,
   // Animation

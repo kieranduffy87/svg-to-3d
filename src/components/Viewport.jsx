@@ -9,6 +9,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
+import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js'
 import { WebGLPathTracer } from 'three-gpu-pathtracer'
 import { BACKGROUND_OPTIONS, EXPORT_QUALITY } from '../constants'
 
@@ -62,7 +63,10 @@ function buildMeshGroup(svgData, settings) {
         triangles += geometry.index
           ? geometry.index.count / 3
           : pos.count / 3
-        group.add(new THREE.Mesh(geometry, material.clone()))
+        const mesh = new THREE.Mesh(geometry, material.clone())
+        // Store the SVG fill colour so we can apply per-path colouring later
+        if (path.color) mesh.userData.svgColor = path.color.clone()
+        group.add(mesh)
       } catch (_) { /* skip shapes ExtrudeGeometry can't handle */ }
     })
   })
@@ -82,20 +86,25 @@ function buildMeshGroup(svgData, settings) {
   return { group, size: sizeVec, triangles: Math.round(triangles) }
 }
 
-function applyBackground(scene, renderer, bgKey, containerEl, customColor = '#111111') {
+function applyBackground(scene, renderer, bgKey, containerEl, customColor = '#111111', hdrTexture = null) {
   const opt = BACKGROUND_OPTIONS[bgKey]
   if (!opt) return
+  containerEl.style.backgroundImage = ''
+  containerEl.style.backgroundSize = ''
+  containerEl.style.backgroundPosition = ''
   if (opt.transparent) {
     renderer.setClearColor(0x000000, 0)
     scene.background = null
     containerEl.style.backgroundImage = 'repeating-conic-gradient(#333 0% 25%, #222 0% 50%)'
     containerEl.style.backgroundSize = '20px 20px'
     containerEl.style.backgroundPosition = '0 0'
+  } else if (opt.hdri) {
+    scene.background = hdrTexture || null
+    renderer.setClearColor(0x111111, 1)
   } else {
     const color = bgKey === 'custom' ? customColor : opt.color
     renderer.setClearColor(color, 1)
     scene.background = new THREE.Color(color)
-    containerEl.style.backgroundImage = ''
   }
   return opt.transparent
 }
@@ -189,6 +198,8 @@ function downloadBlob(blob, filename) {
 export default function Viewport({ svgData, settings, exporting, setExporting }) {
   const containerRef = useRef(null)
   const stateRef = useRef({})
+  const settingsRef = useRef(settings)
+  settingsRef.current = settings
   const [triCount, setTriCount] = useState(0)
   const [uploadError, setUploadError] = useState(null)
   const ptCountRef = useRef(null)
@@ -265,6 +276,11 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
     new HDRLoader().load(HDR_URL, (hdrTex) => {
       hdrTex.mapping = THREE.EquirectangularReflectionMapping
       scene.environment = hdrTex
+      stateRef.current.hdrTexture = hdrTex
+      // Apply as visible background if user has HDRI selected
+      if (settingsRef.current.background === 'hdri') {
+        scene.background = hdrTex
+      }
       if (pathTracer) {
         try { pathTracer.setScene(scene, camera) } catch (_) {}
         stateRef.current.ptNeedsReset = true
@@ -282,7 +298,8 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
 
     const { group: meshGroup, size, triangles } = meshResult
     const maxDim = Math.max(size.x, size.y, size.z)
-    camera.position.set(0, 0, maxDim * 2.2)
+    // Start further out and fly in smoothly (auto-frame)
+    camera.position.set(0, 0, maxDim * 3.5)
     scene.add(meshGroup)
     setTriCount(triangles)
 
@@ -314,6 +331,9 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
     composer.addPass(new RenderPass(scene, camera))
     const bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), settings.bloomIntensity, 0.4, 0.85)
     composer.addPass(bloomPass)
+    const bokehPass = new BokehPass(scene, camera, { focus: maxDim * 3.5, aperture: 0.0008, maxblur: 0.012 })
+    bokehPass.enabled = settings.dofEnabled
+    composer.addPass(bokehPass)
     composer.addPass(new OutputPass())
 
     // Initial PT scene build (before HDR — will be rebuilt once HDR loads)
@@ -324,10 +344,13 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
     stateRef.current = {
       renderer, scene, camera, controls, meshGroup, ground,
       keyLight, fillLight, rimLight, ambientLight,
-      composer, bloomPass, pathTracer,
+      composer, bloomPass, bokehPass, pathTracer,
+      hdrTexture: null,
       maxDim, animTime: 0, paused: false,
       bgTransparent: isTransparent,
       ptNeedsReset: false, ptSamples: 0, ptEnabled: false,
+      // Auto-frame: fly camera from maxDim*3.5 → maxDim*2.2
+      targetCamPos: new THREE.Vector3(0, 0, maxDim * 2.2),
       cleanup: () => {
         renderer.dispose()
         controls.dispose()
@@ -336,10 +359,13 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
       },
     }
 
-    // Reset path tracer accumulation when camera moves
+    // Reset path tracer and update DoF focus when camera moves
     controls.addEventListener('change', () => {
       stateRef.current.ptNeedsReset = true
       stateRef.current.ptSamples = 0
+      if (stateRef.current.bokehPass?.enabled) {
+        stateRef.current.bokehPass.uniforms['focus'].value = stateRef.current.camera.position.length()
+      }
     })
   }, [svgData])
 
@@ -354,7 +380,10 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
     if (!s.meshGroup) return
     s.meshGroup.traverse((child) => {
       if (!child.isMesh) return
-      child.material.color.set(settings.color)
+      const useColor = (settings.useSvgColors && child.userData.svgColor)
+        ? child.userData.svgColor
+        : new THREE.Color(settings.color)
+      child.material.color.copy(useColor)
       child.material.roughness = settings.roughness
       child.material.metalness = settings.metalness
       child.material.clearcoat = settings.clearcoat
@@ -362,7 +391,7 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
       child.material.transmission = settings.transmission
       child.material.ior = settings.ior
       child.material.thickness = settings.thickness
-      child.material.emissive.set(settings.color)
+      child.material.emissive.copy(useColor)
       child.material.emissiveIntensity = settings.emissiveIntensity || 0
       child.material.iridescence = settings.iridescence || 0
       child.material.anisotropy = settings.anisotropy || 0
@@ -382,7 +411,8 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
     }
   }, [settings.color, settings.roughness, settings.metalness, settings.clearcoat,
       settings.clearcoatRoughness, settings.transmission, settings.ior, settings.thickness,
-      settings.lightIntensity, settings.emissiveIntensity, settings.iridescence, settings.anisotropy])
+      settings.lightIntensity, settings.emissiveIntensity, settings.iridescence, settings.anisotropy,
+      settings.useSvgColors])
 
   // Reactive: geometry rebuild
   useEffect(() => {
@@ -416,7 +446,7 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
     const s = stateRef.current
     const container = containerRef.current
     if (!s.renderer || !container) return
-    const isTransparent = applyBackground(s.scene, s.renderer, settings.background, container, settings.customBgColor)
+    const isTransparent = applyBackground(s.scene, s.renderer, settings.background, container, settings.customBgColor, s.hdrTexture)
     s.bgTransparent = isTransparent
   }, [settings.background, settings.customBgColor])
 
@@ -433,6 +463,17 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
     s.ground.visible = settings.showGround
     s.ground.material.opacity = settings.groundOpacity
   }, [settings.showGround, settings.groundOpacity])
+
+  // Reactive: depth of field
+  useEffect(() => {
+    const s = stateRef.current
+    if (!s.bokehPass) return
+    s.bokehPass.enabled = settings.dofEnabled
+    if (settings.dofEnabled) {
+      s.bokehPass.uniforms['maxblur'].value = settings.dofBlur * 0.02
+      s.bokehPass.uniforms['focus'].value = s.camera?.position.length() ?? s.maxDim * 2.2
+    }
+  }, [settings.dofEnabled, settings.dofBlur])
 
   // Reactive: path tracer toggle
   useEffect(() => {

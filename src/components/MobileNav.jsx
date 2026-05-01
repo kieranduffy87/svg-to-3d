@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { NAV_ITEMS, GeometryPanel, MaterialPanel, BackgroundPanel, AnimationPanel, RenderPanel, ExportPanel } from './Panels'
+import { NAV_ITEMS, GeometryPanel, MaterialPanel, BackgroundPanel, AnimationPanel, RenderPanel, ExportPanel, PresetsPanel } from './Panels'
 
 const SECTION_LABELS = {
+  presets: 'Looks',
   geometry: 'Geometry',
   material: 'Material',
   background: 'Background',
@@ -10,7 +11,7 @@ const SECTION_LABELS = {
   export: 'Export',
 }
 
-export default function MobileNav({ settings, updateSetting, setSettings, hasMesh, exporting, setExporting, onUpload }) {
+export default function MobileNav({ settings, updateSetting, setSettings, hasMesh, exporting, setExporting }) {
   const [activeSection, setActiveSection] = useState(null)
 
   // Close sheet on outside tap (handled by backdrop)
@@ -78,6 +79,7 @@ export default function MobileNav({ settings, updateSetting, setSettings, hasMes
 
         {/* Scrollable content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 24px' }}>
+          {activeSection === 'presets'    && <PresetsPanel    setSettings={setSettings} />}
           {activeSection === 'geometry'   && <GeometryPanel   settings={settings} updateSetting={updateSetting} />}
           {activeSection === 'material'   && <MaterialPanel   settings={settings} updateSetting={updateSetting} setSettings={setSettings} />}
           {activeSection === 'background' && <BackgroundPanel settings={settings} updateSetting={updateSetting} />}
