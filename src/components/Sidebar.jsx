@@ -258,14 +258,127 @@ const NAV_ITEMS = [
   { key: 'export',     label: 'Export',     Ico: Icons.Export },
 ]
 
-// ─── Main Sidebar ────────────────────────────────────────────────────────────
-export default function Sidebar({ settings, updateSetting, setSettings, hasMesh, exporting, setExporting, onUpload }) {
-  const [activeSection, setActiveSection] = useState('material')
+function SectionContent({ activeSection, settings, updateSetting, setSettings, hasMesh, exporting, setExporting }) {
+  return (
+    <>
+      {activeSection === 'geometry'   && <GeometryPanel   settings={settings} updateSetting={updateSetting} />}
+      {activeSection === 'material'   && <MaterialPanel   settings={settings} updateSetting={updateSetting} setSettings={setSettings} />}
+      {activeSection === 'background' && <BackgroundPanel settings={settings} updateSetting={updateSetting} />}
+      {activeSection === 'animation'  && <AnimationPanel  settings={settings} updateSetting={updateSetting} />}
+      {activeSection === 'export'     && <ExportPanel     settings={settings} updateSetting={updateSetting} hasMesh={hasMesh} exporting={exporting} setExporting={setExporting} />}
+    </>
+  )
+}
 
+// ─── Main Sidebar ────────────────────────────────────────────────────────────
+export default function Sidebar({ settings, updateSetting, setSettings, hasMesh, exporting, setExporting, onUpload, isMobile = false }) {
+  const [activeSection, setActiveSection] = useState('material')
+  const [panelOpen, setPanelOpen] = useState(true)
+
+  // ── Mobile: bottom panel ────────────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <div style={{
+        width: '100%',
+        background: 'rgba(11,11,15,0.96)',
+        borderTop: '1px solid rgba(255,255,255,0.08)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        display: 'flex',
+        flexDirection: 'column',
+      }}>
+
+        {/* Drag handle + collapse toggle */}
+        <button
+          onClick={() => setPanelOpen(o => !o)}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: '100%', padding: '8px 0 4px',
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            flexShrink: 0,
+          }}
+          aria-label={panelOpen ? 'Collapse controls' : 'Expand controls'}
+        >
+          <div style={{
+            width: 36, height: 4, borderRadius: 2,
+            background: 'rgba(255,255,255,0.15)',
+            transition: 'background 0.15s',
+          }} />
+        </button>
+
+        {/* Horizontal tab bar */}
+        <div style={{
+          display: 'flex',
+          borderBottom: panelOpen ? '1px solid rgba(255,255,255,0.06)' : 'none',
+          padding: '0 8px',
+          flexShrink: 0,
+        }}>
+          {NAV_ITEMS.map(({ key, label, Ico }) => {
+            const active = activeSection === key
+            return (
+              <button
+                key={key}
+                onClick={() => {
+                  if (activeSection === key) {
+                    setPanelOpen(o => !o)
+                  } else {
+                    setActiveSection(key)
+                    setPanelOpen(true)
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '8px 4px 10px',
+                  border: 'none',
+                  borderBottom: active && panelOpen ? '2px solid rgba(255,255,255,0.55)' : '2px solid transparent',
+                  background: 'transparent',
+                  color: active && panelOpen ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  minWidth: 0,
+                  marginBottom: -1,
+                }}
+              >
+                <Ico />
+                <span style={{ fontSize: 9, fontWeight: active ? 500 : 400, letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
+                  {label}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Collapsible content area */}
+        {panelOpen && (
+          <div style={{
+            overflowY: 'auto',
+            padding: '14px 16px 20px',
+            maxHeight: '38vh',
+          }}>
+            <SectionContent
+              activeSection={activeSection}
+              settings={settings}
+              updateSetting={updateSetting}
+              setSettings={setSettings}
+              hasMesh={hasMesh}
+              exporting={exporting}
+              setExporting={setExporting}
+            />
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Desktop: left sidebar ────────────────────────────────────────────────
   return (
     <aside style={{
       width: 260,
-      height: '100vh',
+      height: '100svh',
       display: 'flex',
       flexDirection: 'column',
       background: 'rgba(255,255,255,0.02)',
@@ -336,11 +449,15 @@ export default function Sidebar({ settings, updateSetting, setSettings, hasMesh,
 
       {/* Section content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 20px' }}>
-        {activeSection === 'geometry'   && <GeometryPanel   settings={settings} updateSetting={updateSetting} />}
-        {activeSection === 'material'   && <MaterialPanel   settings={settings} updateSetting={updateSetting} setSettings={setSettings} />}
-        {activeSection === 'background' && <BackgroundPanel settings={settings} updateSetting={updateSetting} />}
-        {activeSection === 'animation'  && <AnimationPanel  settings={settings} updateSetting={updateSetting} />}
-        {activeSection === 'export'     && <ExportPanel     settings={settings} updateSetting={updateSetting} hasMesh={hasMesh} exporting={exporting} setExporting={setExporting} />}
+        <SectionContent
+          activeSection={activeSection}
+          settings={settings}
+          updateSetting={updateSetting}
+          setSettings={setSettings}
+          hasMesh={hasMesh}
+          exporting={exporting}
+          setExporting={setExporting}
+        />
       </div>
 
     </aside>
