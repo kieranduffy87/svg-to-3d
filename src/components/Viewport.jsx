@@ -20,49 +20,66 @@ function buildMeshGroup(svgData, settings) {
   const group = new THREE.Group()
   let triangles = 0
 
-  svgResult.paths.forEach((path) => {
-    const shapes = SVGLoader.createShapes(path)
-    shapes.forEach((shape) => {
-      const geometry = new THREE.ExtrudeGeometry(shape, {
-        depth: settings.extrusionDepth,
-        bevelEnabled: true,
-        bevelSize: settings.bevelSize,
-        bevelThickness: settings.bevelThickness,
-        bevelSegments: settings.bevelSegments || 5,
-      })
-      triangles += geometry.index
-        ? geometry.index.count / 3
-        : geometry.attributes.position.count / 3
+  const material = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color(settings.color),
+    roughness: settings.roughness,
+    metalness: settings.metalness,
+    clearcoat: settings.clearcoat,
+    clearcoatRoughness: settings.clearcoatRoughness,
+    transmission: settings.transmission,
+    ior: settings.ior,
+    thickness: settings.thickness,
+    emissive: new THREE.Color(settings.color),
+    emissiveIntensity: settings.emissiveIntensity || 0,
+    iridescence: settings.iridescence || 0,
+    iridescenceIOR: 1.3,
+    anisotropy: settings.anisotropy || 0,
+    side: THREE.DoubleSide,
+    envMapIntensity: 1.5,
+  })
 
-      const material = new THREE.MeshPhysicalMaterial({
-        color: new THREE.Color(settings.color),
-        roughness: settings.roughness,
-        metalness: settings.metalness,
-        clearcoat: settings.clearcoat,
-        clearcoatRoughness: settings.clearcoatRoughness,
-        transmission: settings.transmission,
-        ior: settings.ior,
-        thickness: settings.thickness,
-        emissive: new THREE.Color(settings.color),
-        emissiveIntensity: settings.emissiveIntensity || 0,
-        iridescence: settings.iridescence || 0,
-        iridescenceIOR: 1.3,
-        anisotropy: settings.anisotropy || 0,
-        side: THREE.DoubleSide,
-        envMapIntensity: 1.5,
-      })
-      group.add(new THREE.Mesh(geometry, material))
+  svgResult.paths.forEach((path) => {
+    let shapes = []
+    try { shapes = SVGLoader.createShapes(path) } catch (_) {}
+    shapes.forEach((shape) => {
+      try {
+        const geometry = new THREE.ExtrudeGeometry(shape, {
+          depth: settings.extrusionDepth,
+          bevelEnabled: true,
+          bevelSize: settings.bevelSize,
+          bevelThickness: settings.bevelThickness,
+          bevelSegments: settings.bevelSegments || 5,
+        })
+        // Skip degenerate geometry that would produce NaN bounding boxes
+        const pos = geometry.attributes.position
+        if (!pos || pos.count === 0) { geometry.dispose(); return }
+        let hasNaN = false
+        for (let i = 0; i < Math.min(pos.count, 9); i++) {
+          if (!isFinite(pos.getX(i)) || !isFinite(pos.getY(i))) { hasNaN = true; break }
+        }
+        if (hasNaN) { geometry.dispose(); return }
+
+        triangles += geometry.index
+          ? geometry.index.count / 3
+          : pos.count / 3
+        group.add(new THREE.Mesh(geometry, material.clone()))
+      } catch (_) { /* skip shapes ExtrudeGeometry can't handle */ }
     })
   })
 
   if (!group.children.length) return null
 
   const box = new THREE.Box3().setFromObject(group)
+  if (box.isEmpty()) return null
+  const sizeVec = box.getSize(new THREE.Vector3())
+  // Guard against NaN/Infinity from degenerate geometry
+  if (!isFinite(sizeVec.x) || !isFinite(sizeVec.y) || !isFinite(sizeVec.z)) return null
+
   const center = box.getCenter(new THREE.Vector3())
   group.position.sub(center)
   group.scale.y *= -1
 
-  return { group, size: box.getSize(new THREE.Vector3()), triangles: Math.round(triangles) }
+  return { group, size: sizeVec, triangles: Math.round(triangles) }
 }
 
 function applyBackground(scene, renderer, bgKey, containerEl, customColor = '#111111') {
@@ -195,7 +212,8 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
     }
     setUploadError(null)
 
-    // Now safe to destroy old scene
+    // Null out renderer first so the animation loop skips frames during transition
+    stateRef.current.renderer = null
     if (stateRef.current.cleanup) stateRef.current.cleanup()
 
     const width = container.clientWidth
@@ -429,15 +447,18 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
     }
   }, [settings.usePathTracer])
 
-  // Animation loop
+  // Animation loop — reads stateRef.current fresh every frame so new scenes
+  // created by setupScene are picked up immediately without restarting the loop.
   useEffect(() => {
-    const s = stateRef.current
-    if (!s.renderer) return
+    if (!stateRef.current.renderer) return
     let animId
     let lastTime = performance.now()
 
     const animate = () => {
       animId = requestAnimationFrame(animate)
+      const s = stateRef.current          // ← fresh ref every frame
+      if (!s.renderer) return             // scene being rebuilt, skip frame
+
       const now = performance.now()
       const delta = Math.min((now - lastTime) / 1000, 0.1)
       lastTime = now
