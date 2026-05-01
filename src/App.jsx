@@ -17,9 +17,29 @@ function useIsMobile() {
 
 export default function App() {
   const [svgData, setSvgData] = useState(KD_ICON_SVG)
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
+  const [settings, setSettings] = useState(() => {
+    try {
+      const hash = window.location.hash.slice(1)
+      if (hash) {
+        const decoded = JSON.parse(atob(hash))
+        return { ...DEFAULT_SETTINGS, ...decoded }
+      }
+    } catch {}
+    return DEFAULT_SETTINGS
+  })
   const [exporting, setExporting] = useState(false)
   const isMobile = useIsMobile()
+
+  useEffect(() => {
+    const shareable = {
+      materialPreset: settings.materialPreset,
+      color: settings.color,
+      animationPreset: settings.animationPreset,
+      background: settings.background,
+      extrusionDepth: settings.extrusionDepth,
+    }
+    window.location.hash = btoa(JSON.stringify(shareable))
+  }, [settings.materialPreset, settings.color, settings.animationPreset, settings.background, settings.extrusionDepth])
 
   const handleSvgUpload = useCallback((file) => {
     const reader = new FileReader()

@@ -1,4 +1,4 @@
-import { MATERIAL_PRESETS, MATERIAL_PREVIEWS, BACKGROUND_OPTIONS, ANIMATION_PRESETS, EXPORT_QUALITY } from '../constants'
+import { MATERIAL_PRESETS, MATERIAL_PREVIEWS, BACKGROUND_OPTIONS, ANIMATION_PRESETS, EXPORT_QUALITY, CAMERA_PRESETS } from '../constants'
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 export const Icons = {
@@ -25,6 +25,12 @@ export const Icons = {
       <polygon points="5 3 19 12 5 21 5 3"/>
     </svg>
   ),
+  Render: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M3 9a2 2 0 0 1 2-2h.93a2 2 0 0 0 1.664-.89l.812-1.22A2 2 0 0 1 10.07 4h3.86a2 2 0 0 1 1.664.89l.812 1.22A2 2 0 0 0 18.07 7H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z"/>
+    </svg>
+  ),
   Export: () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -39,6 +45,7 @@ export const NAV_ITEMS = [
   { key: 'material',   label: 'Material',   Ico: Icons.Material },
   { key: 'background', label: 'BG',         Ico: Icons.Background },
   { key: 'animation',  label: 'Animation',  Ico: Icons.Animation },
+  { key: 'render',     label: 'Render',     Ico: Icons.Render },
   { key: 'export',     label: 'Export',     Ico: Icons.Export },
 ]
 
@@ -88,7 +95,7 @@ export function MaterialPanel({ settings, updateSetting, setSettings }) {
   return (
     <div>
       <SectionLabel>Presets</SectionLabel>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 20 }}>
         {Object.entries(MATERIAL_PRESETS).map(([key, { label }]) => (
           <button key={key} onClick={() => applyPreset(key)} title={label} style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
@@ -109,9 +116,11 @@ export function MaterialPanel({ settings, updateSetting, setSettings }) {
       <Slider label="Transmission" value={settings.transmission} onChange={v => updateSetting('transmission', v)} min={0} max={1} />
       <Slider label="IOR"          value={settings.ior}          onChange={v => updateSetting('ior', v)}          min={1} max={2.5} step={0.01} />
       <Slider label="Thickness"    value={settings.thickness}    onChange={v => updateSetting('thickness', v)}    min={0} max={5}   step={0.1} />
-      {settings.materialPreset === 'neon' && (
+      <Slider label="Iridescence"  value={settings.iridescence}  onChange={v => updateSetting('iridescence', v)}  min={0} max={1} />
+      <Slider label="Anisotropy"   value={settings.anisotropy}   onChange={v => updateSetting('anisotropy', v)}   min={0} max={1} />
+      {settings.emissiveIntensity > 0 || settings.materialPreset === 'neon' ? (
         <Slider label="Glow Intensity" value={settings.emissiveIntensity} onChange={v => updateSetting('emissiveIntensity', v)} min={0} max={2} step={0.05} />
-      )}
+      ) : null}
       <SectionLabel>Color</SectionLabel>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
         <input type="color" value={settings.color}
@@ -178,6 +187,69 @@ export function AnimationPanel({ settings, updateSetting }) {
   )
 }
 
+export function RenderPanel({ settings, updateSetting }) {
+  return (
+    <div>
+      <SectionLabel>Camera</SectionLabel>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 20 }}>
+        {CAMERA_PRESETS.map(({ key, label, dir }) => (
+          <button key={key}
+            onClick={() => window.dispatchEvent(new CustomEvent('set-camera-preset', { detail: { dir } }))}
+            style={{
+              padding: '8px 4px', borderRadius: 10, cursor: 'pointer',
+              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'rgba(255,255,255,0.04)',
+              color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 500,
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = 'rgba(255,255,255,0.9)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)' }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <SectionLabel>Ground</SectionLabel>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+        <button onClick={() => updateSetting('showGround', !settings.showGround)} style={{
+          padding: '7px 18px', borderRadius: 999, cursor: 'pointer', fontSize: 12, border: 'none',
+          background: settings.showGround ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.06)',
+          color: settings.showGround ? '#0b0b0f' : 'rgba(255,255,255,0.4)',
+          fontWeight: 500, transition: 'all 0.15s',
+        }}>
+          {settings.showGround ? 'Visible' : 'Hidden'}
+        </button>
+      </div>
+      {settings.showGround && (
+        <Slider label="Reflection Opacity" value={settings.groundOpacity} onChange={v => updateSetting('groundOpacity', v)} min={0} max={1} step={0.01} />
+      )}
+
+      <SectionLabel>Post Processing</SectionLabel>
+      <Slider label="Bloom Intensity" value={settings.bloomIntensity} onChange={v => updateSetting('bloomIntensity', v)} min={0} max={2} step={0.01} />
+
+      <SectionLabel>Shortcuts</SectionLabel>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {[
+          { key: 'R', desc: 'Reset camera' },
+          { key: 'Space', desc: 'Pause / resume' },
+          { key: 'S', desc: 'Screenshot PNG' },
+        ].map(({ key, desc }) => (
+          <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{
+              fontFamily: 'monospace', fontSize: 10, padding: '2px 7px',
+              borderRadius: 5, border: '1px solid rgba(255,255,255,0.12)',
+              background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.5)',
+              flexShrink: 0,
+            }}>{key}</span>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>{desc}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function ExportPanel({ settings, updateSetting, hasMesh, exporting, setExporting }) {
   const ToggleRow = ({ label, options, value, onChange }) => (
     <div style={{ marginBottom: 18 }}>
@@ -239,6 +311,31 @@ export function ExportPanel({ settings, updateSetting, hasMesh, exporting, setEx
           </>
         )}
       </button>
+
+      <SectionLabel>PNG Still</SectionLabel>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+        {[{ label: '1080p', width: 1920, height: 1080 }, { label: '4K', width: 3840, height: 2160 }].map(({ label, width, height }) => (
+          <button key={label} disabled={!hasMesh}
+            onClick={() => window.dispatchEvent(new CustomEvent('export-png', { detail: { width, height } }))}
+            style={{
+              flex: 1, padding: '9px', borderRadius: 12,
+              cursor: hasMesh ? 'pointer' : 'not-allowed',
+              border: '1px solid rgba(255,255,255,0.1)', background: 'transparent',
+              color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 500,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              transition: 'all 0.15s', opacity: !hasMesh ? 0.4 : 1,
+            }}
+            onMouseEnter={e => { if (hasMesh) { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.color = 'rgba(255,255,255,0.8)' } }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)' }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+            </svg>
+            PNG {label}
+          </button>
+        ))}
+      </div>
+
       <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 14 }}>
         <button disabled={!hasMesh} onClick={() => window.dispatchEvent(new CustomEvent('export-glb'))} style={{
           width: '100%', padding: '9px', borderRadius: 12, cursor: hasMesh ? 'pointer' : 'not-allowed',

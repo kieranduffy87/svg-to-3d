@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
-import { NAV_ITEMS, GeometryPanel, MaterialPanel, BackgroundPanel, AnimationPanel, ExportPanel } from './Panels'
+import { NAV_ITEMS, GeometryPanel, MaterialPanel, BackgroundPanel, AnimationPanel, RenderPanel, ExportPanel } from './Panels'
 
 const SECTION_LABELS = {
   geometry: 'Geometry',
   material: 'Material',
   background: 'Background',
   animation: 'Animation',
+  render: 'Render',
   export: 'Export',
 }
 
@@ -81,6 +82,7 @@ export default function MobileNav({ settings, updateSetting, setSettings, hasMes
           {activeSection === 'material'   && <MaterialPanel   settings={settings} updateSetting={updateSetting} setSettings={setSettings} />}
           {activeSection === 'background' && <BackgroundPanel settings={settings} updateSetting={updateSetting} />}
           {activeSection === 'animation'  && <AnimationPanel  settings={settings} updateSetting={updateSetting} />}
+          {activeSection === 'render'     && <RenderPanel     settings={settings} updateSetting={updateSetting} />}
           {activeSection === 'export'     && <ExportPanel     settings={settings} updateSetting={updateSetting} hasMesh={hasMesh} exporting={exporting} setExporting={setExporting} />}
         </div>
       </div>
