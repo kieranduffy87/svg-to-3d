@@ -9,6 +9,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
+import { WebGLPathTracer } from 'three-gpu-pathtracer'
 import { BACKGROUND_OPTIONS, EXPORT_QUALITY } from '../constants'
 
 const HDR_URL = 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr'
@@ -54,6 +55,8 @@ function buildMeshGroup(svgData, settings) {
     })
   })
 
+  if (!group.children.length) return null
+
   const box = new THREE.Box3().setFromObject(group)
   const center = box.getCenter(new THREE.Vector3())
   group.position.sub(center)
@@ -62,7 +65,7 @@ function buildMeshGroup(svgData, settings) {
   return { group, size: box.getSize(new THREE.Vector3()), triangles: Math.round(triangles) }
 }
 
-function applyBackground(scene, renderer, bgKey, containerEl) {
+function applyBackground(scene, renderer, bgKey, containerEl, customColor = '#111111') {
   const opt = BACKGROUND_OPTIONS[bgKey]
   if (!opt) return
   if (opt.transparent) {
@@ -72,8 +75,9 @@ function applyBackground(scene, renderer, bgKey, containerEl) {
     containerEl.style.backgroundSize = '20px 20px'
     containerEl.style.backgroundPosition = '0 0'
   } else {
-    renderer.setClearColor(opt.color, 1)
-    scene.background = new THREE.Color(opt.color)
+    const color = bgKey === 'custom' ? customColor : opt.color
+    renderer.setClearColor(color, 1)
+    scene.background = new THREE.Color(color)
     containerEl.style.backgroundImage = ''
   }
   return opt.transparent
@@ -169,16 +173,35 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
   const containerRef = useRef(null)
   const stateRef = useRef({})
   const [triCount, setTriCount] = useState(0)
+  const [uploadError, setUploadError] = useState(null)
+  const ptCountRef = useRef(null)
 
   const setupScene = useCallback(() => {
     const container = containerRef.current
     if (!container) return
+
+    // ── Build mesh FIRST — if it fails, keep the old scene alive ────────────
+    let meshResult
+    try {
+      meshResult = buildMeshGroup(svgData, settings)
+    } catch (e) {
+      console.warn('SVG parse error:', e)
+      setUploadError('Could not render this SVG — try a different file.')
+      return
+    }
+    if (!meshResult) {
+      setUploadError('No renderable shapes found in this SVG.')
+      return
+    }
+    setUploadError(null)
+
+    // Now safe to destroy old scene
     if (stateRef.current.cleanup) stateRef.current.cleanup()
 
     const width = container.clientWidth
     const height = container.clientHeight
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true })
     renderer.setSize(width, height)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -187,6 +210,17 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
     renderer.shadowMap.enabled = true
     container.innerHTML = ''
     container.appendChild(renderer.domElement)
+
+    // Path tracer — wrap in try/catch in case of unsupported environments
+    let pathTracer = null
+    try {
+      pathTracer = new WebGLPathTracer(renderer)
+      pathTracer.renderScale = 1.0
+      pathTracer.bounces = 8
+      pathTracer.filterGlossyFactor = 0.25
+    } catch (e) {
+      console.warn('PathTracer unavailable:', e)
+    }
 
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 2000)
@@ -213,14 +247,22 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
     new HDRLoader().load(HDR_URL, (hdrTex) => {
       hdrTex.mapping = THREE.EquirectangularReflectionMapping
       scene.environment = hdrTex
+      if (pathTracer) {
+        try { pathTracer.setScene(scene, camera) } catch (_) {}
+        stateRef.current.ptNeedsReset = true
+      }
     }, undefined, () => {
       const pmrem = new THREE.PMREMGenerator(renderer)
       const rt = pmrem.fromScene(new RoomEnvironment())
       scene.environment = rt.texture
       pmrem.dispose()
+      if (pathTracer) {
+        try { pathTracer.setScene(scene, camera) } catch (_) {}
+        stateRef.current.ptNeedsReset = true
+      }
     })
 
-    const { group: meshGroup, size, triangles } = buildMeshGroup(svgData, settings)
+    const { group: meshGroup, size, triangles } = meshResult
     const maxDim = Math.max(size.x, size.y, size.z)
     camera.position.set(0, 0, maxDim * 2.2)
     scene.add(meshGroup)
@@ -246,24 +288,28 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
     const meshBox = new THREE.Box3().setFromObject(meshGroup)
     ground.position.y = meshBox.min.y - 1
 
-    const isTransparent = applyBackground(scene, renderer, settings.background, container)
-
+    const isTransparent = applyBackground(scene, renderer, settings.background, container, settings.customBgColor)
     controls.saveState()
     controls.update()
 
-    // EffectComposer + Bloom
     const composer = new EffectComposer(renderer)
     composer.addPass(new RenderPass(scene, camera))
     const bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), settings.bloomIntensity, 0.4, 0.85)
     composer.addPass(bloomPass)
     composer.addPass(new OutputPass())
 
+    // Initial PT scene build (before HDR — will be rebuilt once HDR loads)
+    if (pathTracer) {
+      try { pathTracer.setScene(scene, camera) } catch (e) { pathTracer = null }
+    }
+
     stateRef.current = {
       renderer, scene, camera, controls, meshGroup, ground,
       keyLight, fillLight, rimLight, ambientLight,
-      composer, bloomPass,
+      composer, bloomPass, pathTracer,
       maxDim, animTime: 0, paused: false,
       bgTransparent: isTransparent,
+      ptNeedsReset: false, ptSamples: 0, ptEnabled: false,
       cleanup: () => {
         renderer.dispose()
         controls.dispose()
@@ -271,6 +317,12 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
         if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement)
       },
     }
+
+    // Reset path tracer accumulation when camera moves
+    controls.addEventListener('change', () => {
+      stateRef.current.ptNeedsReset = true
+      stateRef.current.ptSamples = 0
+    })
   }, [svgData])
 
   useEffect(() => {
@@ -305,6 +357,11 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
       s.rimLight.intensity = 1.5 * i
       s.ambientLight.intensity = 0.4 * i
     }
+    // Rebuild path tracer BVH when materials change
+    if (s.pathTracer && s.ptEnabled) {
+      try { s.pathTracer.setScene(s.scene, s.camera) } catch (_) {}
+      s.ptNeedsReset = true
+    }
   }, [settings.color, settings.roughness, settings.metalness, settings.clearcoat,
       settings.clearcoatRoughness, settings.transmission, settings.ior, settings.thickness,
       settings.lightIntensity, settings.emissiveIntensity, settings.iridescence, settings.anisotropy])
@@ -313,16 +370,27 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
   useEffect(() => {
     const s = stateRef.current
     if (!s.meshGroup || !svgData) return
+
+    // Build first — don't touch existing mesh until we know it succeeds
+    let result
+    try { result = buildMeshGroup(svgData, settings) } catch (_) { result = null }
+    if (!result) return  // Keep existing mesh intact, no black screen
+
+    // Success — now safe to dispose old geometry and swap in the new
     while (s.meshGroup.children.length) {
       const c = s.meshGroup.children[0]
       c.geometry.dispose(); c.material.dispose(); s.meshGroup.remove(c)
     }
-    const { group: newGroup, triangles } = buildMeshGroup(svgData, settings)
+    const { group: newGroup, triangles } = result
     newGroup.children.forEach((c) => s.meshGroup.add(c.clone()))
     const box = new THREE.Box3().setFromObject(s.meshGroup)
     s.meshGroup.position.sub(box.getCenter(new THREE.Vector3()))
     if (s.ground) s.ground.position.y = box.min.y - 1
     setTriCount(triangles)
+    if (s.pathTracer && s.ptEnabled) {
+      try { s.pathTracer.setScene(s.scene, s.camera) } catch (_) {}
+      s.ptNeedsReset = true
+    }
   }, [settings.extrusionDepth, settings.bevelSize, settings.bevelThickness, settings.bevelSegments, svgData])
 
   // Reactive: background
@@ -330,9 +398,9 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
     const s = stateRef.current
     const container = containerRef.current
     if (!s.renderer || !container) return
-    const isTransparent = applyBackground(s.scene, s.renderer, settings.background, container)
+    const isTransparent = applyBackground(s.scene, s.renderer, settings.background, container, settings.customBgColor)
     s.bgTransparent = isTransparent
-  }, [settings.background])
+  }, [settings.background, settings.customBgColor])
 
   // Reactive: bloom
   useEffect(() => {
@@ -348,6 +416,19 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
     s.ground.material.opacity = settings.groundOpacity
   }, [settings.showGround, settings.groundOpacity])
 
+  // Reactive: path tracer toggle
+  useEffect(() => {
+    const s = stateRef.current
+    s.ptEnabled = settings.usePathTracer
+    if (settings.usePathTracer) {
+      s.ptNeedsReset = true
+      s.ptSamples = 0
+    }
+    if (ptCountRef.current) {
+      ptCountRef.current.style.display = settings.usePathTracer ? 'block' : 'none'
+    }
+  }, [settings.usePathTracer])
+
   // Animation loop
   useEffect(() => {
     const s = stateRef.current
@@ -361,57 +442,74 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
       const delta = Math.min((now - lastTime) / 1000, 0.1)
       lastTime = now
 
-      if (!s.paused) {
-        s.animTime = (s.animTime || 0) + delta
-        if (s.meshGroup) {
-          const t = s.animTime
-          s.meshGroup.rotation.y += settings.rotationSpeed * delta
-          switch (settings.animationPreset) {
-            case 'spin':
-              s.meshGroup.rotation.y += 1.2 * delta
-              break
-            case 'float':
-              s.meshGroup.position.y = Math.sin(t * 1.2) * 5
-              s.meshGroup.rotation.x = Math.sin(t * 0.6) * 0.06
-              break
-            case 'wobble':
-              s.meshGroup.rotation.x = Math.sin(t * 2.5) * 0.18
-              s.meshGroup.rotation.z = Math.cos(t * 1.8) * 0.12
-              break
-            case 'pulse': {
-              const sc = 1 + Math.sin(t * 2.5) * 0.06
-              const sy = Math.sign(s.meshGroup.scale.y)
-              s.meshGroup.scale.set(sc, sc * sy, sc)
-              break
+      if (settings.usePathTracer && s.pathTracer) {
+        // ── Path traced branch ────────────────────────────────────────────────
+        if (s.ptNeedsReset) {
+          s.pathTracer.reset()
+          s.ptNeedsReset = false
+          s.ptSamples = 0
+        }
+        s.controls.update()
+        s.pathTracer.renderSample()
+        s.ptSamples++
+        if (ptCountRef.current) {
+          ptCountRef.current.textContent = `PT · ${s.ptSamples} spp`
+        }
+      } else {
+        // ── Rasterization branch ──────────────────────────────────────────────
+        const speed = settings.animationSpeed ?? 1
+        if (!s.paused) {
+          s.animTime = (s.animTime || 0) + delta
+          if (s.meshGroup) {
+            const t = s.animTime
+            s.meshGroup.rotation.y += settings.rotationSpeed * delta
+            switch (settings.animationPreset) {
+              case 'spin':
+                s.meshGroup.rotation.y += 1.2 * speed * delta
+                break
+              case 'float':
+                s.meshGroup.position.y = Math.sin(t * 1.2 * speed) * 5
+                s.meshGroup.rotation.x = Math.sin(t * 0.6 * speed) * 0.06
+                break
+              case 'wobble':
+                s.meshGroup.rotation.x = Math.sin(t * 2.5 * speed) * 0.18
+                s.meshGroup.rotation.z = Math.cos(t * 1.8 * speed) * 0.12
+                break
+              case 'pulse': {
+                const sc = 1 + Math.sin(t * 2.5 * speed) * 0.06
+                const sy = Math.sign(s.meshGroup.scale.y)
+                s.meshGroup.scale.set(sc, sc * sy, sc)
+                break
+              }
+              case 'orbit':
+                s.meshGroup.rotation.y += 0.6 * speed * delta
+                s.meshGroup.rotation.x = Math.sin(t * 0.4 * speed) * 0.3
+                break
             }
-            case 'orbit':
-              s.meshGroup.rotation.y += 0.6 * delta
-              s.meshGroup.rotation.x = Math.sin(t * 0.4) * 0.3
-              break
           }
         }
-      }
 
-      // Camera preset tween
-      if (s.targetCamPos) {
-        s.camera.position.lerp(s.targetCamPos, 0.08)
-        if (s.camera.position.distanceTo(s.targetCamPos) < 0.5) {
-          s.camera.position.copy(s.targetCamPos)
-          s.targetCamPos = null
+        // Camera preset tween
+        if (s.targetCamPos) {
+          s.camera.position.lerp(s.targetCamPos, 0.08)
+          if (s.camera.position.distanceTo(s.targetCamPos) < 0.5) {
+            s.camera.position.copy(s.targetCamPos)
+            s.targetCamPos = null
+          }
         }
-      }
 
-      s.controls.update()
-      if (s.bgTransparent) {
-        s.renderer.render(s.scene, s.camera)
-      } else {
-        s.composer.render()
+        s.controls.update()
+        if (s.bgTransparent) {
+          s.renderer.render(s.scene, s.camera)
+        } else {
+          s.composer.render()
+        }
       }
     }
 
     animate()
     return () => cancelAnimationFrame(animId)
-  }, [settings.rotationSpeed, settings.animationPreset])
+  }, [settings.rotationSpeed, settings.animationPreset, settings.animationSpeed, settings.usePathTracer])
 
   // Resize
   useEffect(() => {
@@ -544,6 +642,30 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
             : {}),
         }}
       />
+
+      {/* Error overlay — shown when SVG upload fails */}
+      {uploadError && (
+        <div style={{
+          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(12px)',
+          zIndex: 10,
+        }}>
+          <div style={{
+            background: 'rgba(255,50,50,0.1)', border: '1px solid rgba(255,80,80,0.25)',
+            borderRadius: 18, padding: '28px 36px', maxWidth: 340, textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 32, marginBottom: 14, opacity: 0.8 }}>⚠</div>
+            <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', marginBottom: 8, lineHeight: 1.5 }}>
+              {uploadError}
+            </div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.28)', lineHeight: 1.4 }}>
+              Upload a different SVG to continue
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Triangle count */}
       {triCount > 0 && (
         <div style={{
           position: 'absolute', bottom: 12, left: 12,
@@ -554,6 +676,17 @@ export default function Viewport({ svgData, settings, exporting, setExporting })
           {triCount.toLocaleString()} tri
         </div>
       )}
+
+      {/* Path tracer sample counter */}
+      <div ref={ptCountRef} style={{
+        display: 'none',
+        position: 'absolute', bottom: 12, right: 12,
+        fontSize: 10, fontFamily: 'monospace',
+        color: 'rgba(255,255,255,0.5)',
+        pointerEvents: 'none', letterSpacing: '0.05em',
+        background: 'rgba(0,0,0,0.35)', padding: '3px 9px', borderRadius: 6,
+        border: '1px solid rgba(255,255,255,0.08)',
+      }} />
     </div>
   )
 }

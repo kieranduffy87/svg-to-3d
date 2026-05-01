@@ -42,6 +42,7 @@ export const BACKGROUND_OPTIONS = {
   studio:      { label: 'Studio',      color: '#2d2d2d', transparent: false },
   light:       { label: 'Light',       color: '#f0f0f0', transparent: false },
   blue:        { label: 'Deep Blue',   color: '#050d2e', transparent: false },
+  custom:      { label: 'Custom',      color: null,      transparent: false },
   transparent: { label: 'Transparent', color: null,      transparent: true  },
 }
 
@@ -88,15 +89,18 @@ export const DEFAULT_SETTINGS = {
   materialPreset: 'glass',
   // Background
   background: 'dark',
+  customBgColor: '#1a1a2e',
   // Lighting
   lightIntensity: 1.0,
   // Animation
   animationPreset: 'spin',
   rotationSpeed: 0,
+  animationSpeed: 1,
   // Render
   showGround: true,
   groundOpacity: 0.22,
   bloomIntensity: 0.18,
+  usePathTracer: false,
   // Export
   exportFormat: 'webm',
   exportQuality: 'medium',

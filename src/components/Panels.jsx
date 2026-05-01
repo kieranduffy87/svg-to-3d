@@ -153,12 +153,39 @@ export function BackgroundPanel({ settings, updateSetting }) {
               width: '100%', height: 32, borderRadius: 8,
               ...(opt.transparent
                 ? { backgroundImage: 'repeating-conic-gradient(rgba(255,255,255,0.08) 0% 25%, rgba(255,255,255,0.02) 0% 50%)', backgroundSize: '10px 10px' }
+                : key === 'custom'
+                ? { background: settings.customBgColor }
                 : { background: opt.color }),
             }} />
             <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>{opt.label}</span>
           </button>
         ))}
       </div>
+
+      {/* Custom color picker — shown when custom is selected */}
+      {settings.background === 'custom' && (
+        <div style={{
+          marginTop: 14, padding: '12px 14px', borderRadius: 12,
+          background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex', alignItems: 'center', gap: 12,
+        }}>
+          <input
+            type="color"
+            value={settings.customBgColor}
+            onChange={e => updateSetting('customBgColor', e.target.value)}
+            style={{
+              width: 36, height: 36, borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)',
+              background: 'none', cursor: 'pointer', padding: 2, flexShrink: 0,
+            }}
+          />
+          <div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', fontFamily: 'monospace', marginBottom: 2 }}>
+              {settings.customBgColor}
+            </div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>Click to pick any color</div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -182,7 +209,8 @@ export function AnimationPanel({ settings, updateSetting }) {
           </button>
         ))}
       </div>
-      <Slider label="Rotation Speed" value={settings.rotationSpeed} onChange={v => updateSetting('rotationSpeed', v)} min={0} max={5} step={0.05} />
+      <Slider label="Rotation Speed"  value={settings.rotationSpeed}  onChange={v => updateSetting('rotationSpeed', v)}  min={0} max={5}   step={0.05} />
+      <Slider label="Animation Speed" value={settings.animationSpeed} onChange={v => updateSetting('animationSpeed', v)} min={0} max={4}   step={0.05} />
     </div>
   )
 }
@@ -224,6 +252,30 @@ export function RenderPanel({ settings, updateSetting }) {
       {settings.showGround && (
         <Slider label="Reflection Opacity" value={settings.groundOpacity} onChange={v => updateSetting('groundOpacity', v)} min={0} max={1} step={0.01} />
       )}
+
+      <SectionLabel>Path Tracer</SectionLabel>
+      <div style={{ marginBottom: 18 }}>
+        <button onClick={() => updateSetting('usePathTracer', !settings.usePathTracer)} style={{
+          width: '100%', padding: '10px 16px', borderRadius: 12, cursor: 'pointer', border: 'none',
+          background: settings.usePathTracer ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.06)',
+          color: settings.usePathTracer ? '#0b0b0f' : 'rgba(255,255,255,0.5)',
+          fontSize: 12, fontWeight: 600, transition: 'all 0.15s',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+          {settings.usePathTracer ? 'Path Tracer On' : 'Path Tracer Off'}
+        </button>
+        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', marginTop: 8, lineHeight: 1.5, paddingLeft: 2 }}>
+          {settings.usePathTracer
+            ? 'Accumulating samples — move camera to reset. Pauses animation.'
+            : 'Real-time ray tracing for glass, chrome & reflections.'}
+        </div>
+      </div>
 
       <SectionLabel>Post Processing</SectionLabel>
       <Slider label="Bloom Intensity" value={settings.bloomIntensity} onChange={v => updateSetting('bloomIntensity', v)} min={0} max={2} step={0.01} />
